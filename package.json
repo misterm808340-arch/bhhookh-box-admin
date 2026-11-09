@@ -2,13 +2,14 @@
   "name": "bhhookh-box-admin",
   "version": "1.0.0",
   "private": true,
-  "description": "BHHOOKH BOX — Admin dashboard (Next.js + Firebase) for the food delivery MVP",
+  "description": "BHHOOKH BOX \u2014 Admin dashboard (Next.js + Firebase) for the food delivery MVP",
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "build": "next build && if [ -d .next/standalone ]; then cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/; fi",
     "build:static": "NEXT_STATIC_EXPORT=1 next build",
     "start": "NODE_ENV=production node .next/standalone/server.js",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:pages": "NEXT_STATIC_EXPORT=1 NEXT_BASE_PATH=/bhhookh-box-admin next build"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.11",

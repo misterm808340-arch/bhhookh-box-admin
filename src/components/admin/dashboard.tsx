@@ -3,25 +3,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bike,
-  CircleCheck,
   CircleX,
   Clock,
   Flame,
   IndianRupee,
+  LayoutGrid,
   LogOut,
   PackageCheck,
   ReceiptText,
+  Users,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminOrders } from "@/hooks/use-admin-orders";
+import { useDrivers } from "@/hooks/use-drivers";
 import { ensureAudioUnlocked, playNewOrderChime } from "@/lib/sound";
 import { formatINR, type Order } from "@/lib/orders";
 import { StatCard } from "./stat-card";
 import { NewOrderBanner, type NewOrderAlertData } from "./new-order-banner";
 import { OrdersBoard } from "./orders-board";
+import { MenuSection } from "./menu-section";
+import { DriversManager } from "./drivers-manager";
+import { Reports } from "./reports";
+
+type DashboardTab = "orders" | "menu" | "drivers" | "reports";
 
 const SOUND_STORAGE_KEY = "bhb-admin-sound-enabled";
 
@@ -33,6 +40,7 @@ interface DashboardProps {
 export function AdminDashboard({ userEmail, onSignOut }: DashboardProps) {
   const [soundOn, setSoundOn] = useState(false);
   const [newAlert, setNewAlert] = useState<NewOrderAlertData | null>(null);
+  const [tab, setTab] = useState<DashboardTab>("orders");
   const soundRef = useRef(false);
   const { toast } = useToast();
 
@@ -52,7 +60,17 @@ export function AdminDashboard({ userEmail, onSignOut }: DashboardProps) {
     }
   }, []);
 
-  const { orders, loading, error, stats, updateOrderStatus } = useAdminOrders(true, handleNewOrder);
+  const { orders, loading, error, stats, updateOrderStatus, assignDriver } = useAdminOrders(
+    true,
+    handleNewOrder
+  );
+  const { drivers } = useDrivers(true);
+
+  const driverOptions = drivers.map((driver) => ({
+    uid: driver.uid,
+    name: driver.name,
+    active: driver.active,
+  }));
 
   function toggleSound() {
     const next = !soundOn;
@@ -105,6 +123,30 @@ export function AdminDashboard({ userEmail, onSignOut }: DashboardProps) {
             Live · Firestore
           </span>
 
+          {/* Section switcher: orders ↔ menu ↔ drivers ↔ reports */}
+          <div className="flex rounded-full border border-input bg-white p-0.5">
+            {(
+              [
+                ["orders", ReceiptText, "Orders"],
+                ["menu", LayoutGrid, "Menu"],
+                ["drivers", Users, "Drivers"],
+                ["reports", IndianRupee, "Reports"],
+              ] as const
+            ).map(([value, Icon, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTab(value)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+                  tab === value ? "bg-brand text-white" : "text-muted-foreground hover:text-brand"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             onClick={toggleSound}
@@ -142,27 +184,29 @@ export function AdminDashboard({ userEmail, onSignOut }: DashboardProps) {
           <NewOrderBanner alert={newAlert} onDismiss={() => setNewAlert(null)} />
         )}
 
+        {tab === "orders" ? (
+          <>
         {/* Overview stats */}
         <section aria-label="Overview" className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           <StatCard label="Total Orders" value={stats.total} icon={ReceiptText} chipClass="bg-brand text-white" />
           <StatCard
-            label="Pending"
-            value={stats.pending}
+            label="New / Order Placed"
+            value={stats.orderPlaced}
             icon={Clock}
             chipClass="bg-amber-100 text-amber-700"
-            highlight={stats.pending > 0}
+            highlight={stats.orderPlaced > 0}
           />
-          <StatCard label="Accepted" value={stats.accepted} icon={CircleCheck} chipClass="bg-teal-100 text-teal-700" />
           <StatCard label="Preparing" value={stats.preparing} icon={Flame} chipClass="bg-violet-100 text-violet-700" />
           <StatCard label="Out for Delivery" value={stats.outForDelivery} icon={Bike} chipClass="bg-sky-100 text-sky-700" />
-          <StatCard label="Delivered" value={stats.delivered} icon={PackageCheck} chipClass="bg-emerald-100 text-emerald-700" />
-          <StatCard label="Rejected" value={stats.rejected} icon={CircleX} chipClass="bg-rose-100 text-rose-600" />
           <StatCard
-            label="Total Order Value"
-            value={formatINR(stats.totalValue)}
+            label="Today's Sales"
+            value={formatINR(stats.todaySales)}
             icon={IndianRupee}
             chipClass="bg-lime-brand text-brand-deep"
           />
+          <StatCard label="Delivered (all time)" value={stats.delivered} icon={PackageCheck} chipClass="bg-emerald-100 text-emerald-700" />
+          <StatCard label="Rejected" value={stats.rejected} icon={CircleX} chipClass="bg-rose-100 text-rose-600" />
+          <StatCard label="Cancelled" value={stats.cancelled} icon={CircleX} chipClass="bg-slate-100 text-slate-600" />
         </section>
 
         {/* Live orders */}
@@ -171,17 +215,27 @@ export function AdminDashboard({ userEmail, onSignOut }: DashboardProps) {
             <div>
               <h2 className="text-lg font-bold text-brand">Live Orders</h2>
               <p className="text-sm text-muted-foreground">
-                Streamed in real time from Firestore · newest first
+                Streamed in real time from Firestore · newest first · accepted totals ₹{formatINR(stats.totalValue)}
               </p>
             </div>
           </div>
           <OrdersBoard
             orders={orders}
+            drivers={driverOptions}
             loading={loading}
             error={error}
             onUpdateStatus={updateOrderStatus}
+            onAssignDriver={assignDriver}
           />
         </section>
+          </>
+        ) : tab === "menu" ? (
+          <MenuSection />
+        ) : tab === "drivers" ? (
+          <DriversManager />
+        ) : (
+          <Reports orders={orders} loading={loading} error={error} />
+        )}
       </main>
 
       <footer className="border-t bg-white">
